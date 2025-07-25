@@ -9,7 +9,7 @@
 
     <!-- Ad Banner -->
     <div class="ad-banner">
-      <p>Ad Space - Your Ad Here</p>
+      <p>Ad Space</p>
     </div>
 
     <!-- Calculator Dialog -->
@@ -19,18 +19,19 @@
           <h3>Calculator</h3>
           <button @click="showCalculator = false" class="close-btn">&times;</button>
         </div>
-        <Calculator />
+        <CalculatorComponent />
       </div>
     </div>
   </div>
 </template>
 
 <script>
-import Calculator from './components/CalculatorComponent.vue';
+import CalculatorComponent from './components/CalculatorComponent.vue';
 
 export default {
+  name: 'App',
   components: {
-    Calculator
+    CalculatorComponent
   },
   data() {
     return {
@@ -67,13 +68,14 @@ body {
   background-color: var(--base);
 }
 
+/* Responsive Container */
 @media (min-width: 768px) {
   #main-app-container {
-    max-width: 2500px;
+    max-width: 2600px;
   }
 }
 
-/* Common Styles for Buttons, Inputs, Cards */
+/* Common Styles */
 button, .btn {
   font-family: 'Montserrat', sans-serif;
   padding: 12px 20px;
@@ -84,29 +86,35 @@ button, .btn {
   transition: background-color 0.2s;
 }
 
-.btn-primary {
-  background-color: var(--primary);
+.btn-primary { background-color: var(--primary); color: var(--white); }
+.btn-primary:hover { background-color: var(--secondary); }
+.btn-secondary { background-color: var(--tertiary); color: var(--white); }
+.btn-danger { background-color: var(--danger); color: var(--white); }
+
+.btn-icon {
+  background: none;
+  border: none;
   color: var(--white);
+  padding: 8px;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.btn-primary:hover {
-  background-color: var(--secondary);
-}
-.btn-secondary {
-  background-color: var(--tertiary);
-  color: var(--white);
-}
-.btn-danger {
-    background-color: var(--danger);
-    color: var(--white);
+.btn-icon:hover {
+  background-color: rgba(255, 255, 255, 0.1);
 }
 
-input[type="text"], input[type="number"] {
+input[type="text"], input[type="number"], .payer-select {
   width: 100%;
   padding: 12px;
   border-radius: 8px;
   border: 1px solid var(--tertiary);
   box-sizing: border-box;
   font-size: 16px; /* Prevents iOS zoom */
+  background-color: var(--white);
 }
 
 .card {
@@ -125,15 +133,9 @@ input[type="text"], input[type="number"] {
   align-items: center;
   gap: 16px;
 }
+.page-header h1 { margin: 0; font-size: 1.5rem; }
 
-.page-header h1 {
-  margin: 0;
-  font-size: 1.5rem;
-}
-
-.page-content {
-  padding: 16px;
-}
+.page-content { padding: 16px; }
 
 /* Dialog/Modal Styles */
 .dialog-overlay {
@@ -147,12 +149,13 @@ input[type="text"], input[type="number"] {
   justify-content: center;
   align-items: center;
   z-index: 1000;
+  padding: 16px;
 }
 .dialog-content {
   background: var(--white);
   padding: 24px;
   border-radius: 12px;
-  width: 90%;
+  width: 100%;
   max-width: 400px;
 }
 .dialog-header {
@@ -161,16 +164,8 @@ input[type="text"], input[type="number"] {
   align-items: center;
   margin-bottom: 16px;
 }
-.dialog-header h3 {
-  margin: 0;
-}
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 2rem;
-  cursor: pointer;
-  color: var(--tertiary);
-}
+.dialog-header h3 { margin: 0; }
+.close-btn { background: none; border: none; font-size: 2rem; cursor: pointer; color: var(--tertiary); }
 
 /* FAB and Ad Banner */
 .fab {

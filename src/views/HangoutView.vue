@@ -9,30 +9,33 @@
     </header>
 
     <div class="page-content">
-      <!-- People Section -->
-      <div class="card">
-        <h2>People ({{ hangout.people.length }})</h2>
-        <div v-for="person in hangout.people" :key="person.id" class="list-item">
-          <span>{{ person.name }}</span>
-          <button @click="removePerson(person.id)" class="btn-remove">&times;</button>
-        </div>
-        <button @click="showAddPersonDialog = true" class="btn-secondary" style="width:100%; margin-top: 16px;">+ Add Person</button>
-      </div>
-
-      <!-- Categories Section -->
-      <div class="card">
-        <h2>Categories ({{ hangout.categories.length }})</h2>
-        <div v-for="category in hangout.categories" :key="category.id" class="list-item-clickable" @click="goToCategory(category.id)">
-            <div>
-                <span>{{ category.name }}</span>
-                <p class="item-subtext">Total: \${{ category.totalAmount.toFixed(2) }}</p>
+      <div class="hangout-grid">
+        <div>
+          <!-- People Section -->
+          <div class="card">
+            <h2>People ({{ hangout.people.length }})</h2>
+            <div v-for="person in hangout.people" :key="person.id" class="list-item">
+              <span>{{ person.name }}</span>
+              <button @click="removePerson(person.id)" class="btn-remove">&times;</button>
             </div>
-            <button @click.stop="removeCategory(category.id)" class="btn-remove">&times;</button>
+            <button @click="showAddPersonDialog = true" class="btn-secondary" style="width:100%; margin-top: 16px;">+ Add Person</button>
+          </div>
         </div>
-        <button @click="showAddCategoryDialog = true" class="btn-secondary" style="width:100%; margin-top: 16px;">+ Add Category</button>
+
+        <!-- Categories Section -->
+        <div class="card">
+          <h2>Categories ({{ hangout.categories.length }})</h2>
+          <div v-for="category in hangout.categories" :key="category.id" class="list-item-clickable" @click="goToCategory(category.id)">
+              <div>
+                  <span>{{ category.name }}</span>
+                  <p class="item-subtext">Total: {{ displayAmount(category.totalAmount) }}</p>
+              </div>
+              <button @click.stop="removeCategory(category.id)" class="btn-remove">&times;</button>
+          </div>
+          <button @click="showAddCategoryDialog = true" class="btn-secondary" style="width:100%; margin-top: 16px;">+ Add Category</button>
+        </div>
       </div>
       
-      <!-- Results Button -->
       <button @click="goToResults" class="btn-primary" style="width: 100%; padding: 16px; font-size: 1.2rem; margin-top: 16px;">View Results</button>
     </div>
 
@@ -48,32 +51,39 @@
       <div class="dialog-content">
         <h3>Add Category</h3>
         <input type="text" v-model="newCategoryName" placeholder="e.g., Food, Tickets">
-        <input type="number" v-model="newCategoryAmount" placeholder="Total Bill for Category" style="margin-top: 8px;">
+        <input type="number" v-model="newCategoryTotal" placeholder="Total Bill Amount (inc. charges)" style="margin-top: 8px;">
         <button @click="addCategory" class="btn-primary" style="width: 100%; margin-top: 16px;">Add</button>
       </div>
     </div>
   </div>
-  <div v-else>Loading...</div>
+  <div v-else class="page-content">Loading...</div>
 </template>
 
 <script>
 import { v4 as uuidv4 } from 'uuid';
+import { formatCurrency, loadCurrency } from '../utils/currency.js';
 
 export default {
+  name: 'HangoutView',
   data() {
     return {
       hangout: null,
+      currency: 'IDR',
       showAddPersonDialog: false,
       newPersonName: '',
       showAddCategoryDialog: false,
       newCategoryName: '',
-      newCategoryAmount: '',
+      newCategoryTotal: '',
     };
   },
   created() {
+    this.currency = loadCurrency();
     this.loadHangout();
   },
   methods: {
+    displayAmount(amount) {
+      return formatCurrency(amount, this.currency);
+    },
     loadHangout() {
       const hangouts = JSON.parse(localStorage.getItem('split_bill_hangouts') || '[]');
       this.hangout = hangouts.find(h => h.id === this.$route.params.id);
@@ -81,9 +91,7 @@ export default {
     saveHangout() {
       const hangouts = JSON.parse(localStorage.getItem('split_bill_hangouts') || '[]');
       const index = hangouts.findIndex(h => h.id === this.hangout.id);
-      if (index !== -1) {
-        hangouts[index] = this.hangout;
-      }
+      if (index !== -1) { hangouts[index] = this.hangout; }
       localStorage.setItem('split_bill_hangouts', JSON.stringify(hangouts));
     },
     addPerson() {
@@ -95,77 +103,59 @@ export default {
     },
     removePerson(personId) {
       this.hangout.people = this.hangout.people.filter(p => p.id !== personId);
-      // Also remove them from any bill items
-      this.hangout.categories.forEach(cat => {
-          cat.items = cat.items.filter(item => item.personId !== personId);
-      });
+      this.hangout.categories.forEach(cat => { cat.items = cat.items.filter(item => item.personId !== personId); });
       this.saveHangout();
     },
     addCategory() {
-      if (!this.newCategoryName.trim() || !this.newCategoryAmount) return;
+      if (!this.newCategoryName.trim() || !this.newCategoryTotal) return;
+      const totalAmount = parseFloat(this.newCategoryTotal);
       this.hangout.categories.push({
         id: uuidv4(),
         name: this.newCategoryName.trim(),
-        totalAmount: parseFloat(this.newCategoryAmount),
+        totalAmount: totalAmount,
+        subtotal: totalAmount,
+        taxRate: 0, // Tax rate is now per-category
+        hasTax: false,
+        hasService: false,
+        serviceCharge: 0,
+        hasDelivery: false,
+        deliveryCharge: 0,
         items: [],
         paidBy: null,
       });
       this.saveHangout();
       this.newCategoryName = '';
-      this.newCategoryAmount = '';
+      this.newCategoryTotal = '';
       this.showAddCategoryDialog = false;
     },
     removeCategory(categoryId) {
-        this.hangout.categories = this.hangout.categories.filter(c => c.id !== categoryId);
-        this.saveHangout();
+      this.hangout.categories = this.hangout.categories.filter(c => c.id !== categoryId);
+      this.saveHangout();
     },
     goToCategory(categoryId) {
-        this.$router.push({ name: 'category', params: { hangoutId: this.hangout.id, categoryId: categoryId } });
+      this.$router.push({ name: 'category', params: { hangoutId: this.hangout.id, categoryId: categoryId } });
     },
     goToResults() {
-        this.$router.push({ name: 'results', params: { id: this.hangout.id } });
+      this.$router.push({ name: 'results', params: { id: this.hangout.id } });
     }
   }
 };
 </script>
 
 <style scoped>
-.btn-back {
-  background: var(--secondary);
-  color: var(--white);
-  border-radius: 50%;
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  font-size: 1.5rem;
-  line-height: 1;
-}
-.list-item, .list-item-clickable {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px;
-  background-color: var(--base);
-  border-radius: 8px;
-  margin-bottom: 8px;
-}
-.list-item-clickable {
-    cursor: pointer;
-}
-.list-item-clickable:hover {
-    background-color: #c1bed4;
-}
-.item-subtext {
-    margin: 4px 0 0;
-    font-size: 0.8rem;
-    color: var(--tertiary);
-}
-.btn-remove {
-  background: none;
-  border: none;
-  color: var(--danger);
-  font-size: 1.5rem;
-  font-weight: 700;
-  cursor: pointer;
+.btn-back { background: var(--secondary); color: var(--white); border-radius: 50%; width: 40px; height: 40px; padding: 0; font-size: 1.5rem; line-height: 1; }
+.list-item, .list-item-clickable { display: flex; justify-content: space-between; align-items: center; padding: 12px; background-color: var(--base); border-radius: 8px; margin-bottom: 8px; }
+.list-item-clickable { cursor: pointer; }
+.item-subtext { margin: 4px 0 0; font-size: 0.8rem; color: var(--tertiary); }
+.btn-remove { background: none; border: none; color: var(--danger); font-size: 1.5rem; font-weight: 700; cursor: pointer; }
+.input-label { display:block; margin-bottom: 8px; font-weight: 500; }
+
+@media (min-width: 768px) {
+  .hangout-grid {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 24px;
+    align-items: start;
+  }
 }
 </style>
