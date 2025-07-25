@@ -1,4 +1,4 @@
-# split-bill-app
+# EZsplit
 
 ## Project setup
 ```
