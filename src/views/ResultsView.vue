@@ -36,7 +36,7 @@
 
       <div class="card">
         <h2>Who Owes Whom</h2>
-        <div v-if="transactions.length === 0" class="settled"><p>🎉 All settled up!</p></div>
+        <div v-if="transactions.length === 0" class="settled"><p>🎉 CEPMEK Free from Debts!</p></div>
         <div v-else>
             <div v-for="(t, index) in transactions" :key="index" class="transaction-item">
                 <span>{{ t.from }}</span>
