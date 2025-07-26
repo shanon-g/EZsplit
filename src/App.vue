@@ -58,7 +58,7 @@ body {
   font-family: 'Montserrat', sans-serif;
   background-color: var(--base);
   color: var(--primary);
-  padding-bottom: 90px; /* Space for FAB and Ad banner */
+  padding-bottom: 90px;
 }
 
 #main-app-container {
