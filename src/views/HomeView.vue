@@ -1,7 +1,8 @@
 <template>
   <div>
     <header class="page-header">
-      <h1 style="flex-grow: 1; text-align: center; padding-left: 5%;">EZsplit</h1>
+      <img src="/logo.png" alt="EZsplit Logo" style="height: 54px; margin-right: 10px;" />
+      <h1 style="flex-grow: 1; text-align: center;">EZsplit</h1>
       <button @click="showSettingsDialog = true" class="btn-icon">
         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
       </button>
@@ -67,7 +68,22 @@ export default {
     this.loadHangouts();
     this.currency = localStorage.getItem('split_bill_currency') || 'IDR';
   },
+  mounted() {
+    window.addEventListener('scroll', this.handleScroll);
+  },
+  beforeUnmount() {
+    window.removeEventListener('scroll', this.handleScroll);
+  },
   methods: {
+    handleScroll() {
+      const header = document.querySelector('.page-header');
+      if (window.scrollY > 50) {
+          header?.classList.add('translucent');
+      } else {
+          header?.classList.remove('translucent');
+      }
+    },
+    
     loadHangouts() {
       const data = localStorage.getItem('split_bill_hangouts');
       if (data) {
@@ -104,7 +120,18 @@ export default {
 </script>
 
 <style scoped>
-.page-header { justify-content: space-between; }
+.page-header {
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 999;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: opacity 0.5s ease;
+}
+.page-header.translucent {
+  opacity: 75%;
+  backdrop-filter: blur(6px);
+}
 .hangout-item { display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
 .hangout-item h3 { margin: 0; }
 .hangout-item .date { margin: 4px 0 0; color: var(--tertiary); font-size: 0.9rem; }

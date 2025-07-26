@@ -1,15 +1,16 @@
 <template>
   <div v-if="category && hangout">
-    <header class="page-header">
+    <header class="page-header" style="padding: 0 1rem;">
       <router-link :to="{ name: 'hangout', params: { id: hangout.id } }"><button class="btn-back">&lt;</button></router-link>
-      <div>
+      <div style="text-align: left; flex-grow: 1; padding-left: 10px;">
         <h1>{{ category.name }}</h1>
         <p style="margin:0; opacity: 0.8;">Final Total: {{ displayAmount(category.totalAmount) }}</p>
       </div>
+
+      <img src="/logo.png" alt="EZsplit Logo" style="height: 60px; padding: 5px 0" />
     </header>
 
     <div class="page-content">
-        <!-- ... Toggles and Charges Breakdown cards ... (No changes here) -->
         <div class="card">
           <div class="tax-toggle-wrapper">
             <label class="tax-toggle-label">This category includes tax</label>
@@ -67,7 +68,7 @@
             </select>
         </div>
 
-        <!-- NEW: Equal Split Card -->
+        <!-- Equal Split Card -->
         <div class="card">
             <h2>Quick Actions</h2>
             <button @click="openEqualSplitDialog" class="btn-secondary" style="width:100%;">Split Subtotal Equally</button>
@@ -127,7 +128,6 @@
         </div>
     </div>
 
-    <!-- ... other dialogs ... -->
     <AssignItemsDialog 
         v-if="showAssignDialog" 
         :scannedItems="scannedItems"
@@ -220,7 +220,21 @@ export default {
         this.currency = loadCurrency();
         this.loadData();
     },
+    mounted() {
+        window.addEventListener('scroll', this.handleScroll);
+    },
+    beforeUnmount() {
+        window.removeEventListener('scroll', this.handleScroll);
+    },
     methods: {
+        handleScroll() {
+            const header = document.querySelector('.page-header');
+            if (window.scrollY > 50) {
+                header?.classList.add('translucent');
+            } else {
+                header?.classList.remove('translucent');
+            }
+        },
         displayAmount(amount) { return formatCurrency(amount, this.currency); },
         loadData() {
             const hangouts = JSON.parse(localStorage.getItem('split_bill_hangouts') || '[]');
@@ -320,6 +334,18 @@ export default {
 </script>
 
 <style scoped>
+.page-header {
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 999;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: opacity 0.5s ease;
+}
+.page-header.translucent {
+  opacity: 75%;
+  backdrop-filter: blur(6px);
+}
 .btn-back { background: var(--secondary); color: var(--white); border-radius: 50%; width: 40px; height: 40px; padding: 0; font-size: 1.5rem; line-height: 1; }
 .tax-details-section { margin-bottom: 8px; }
 .tax-details > div, .actual-tax-input { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }

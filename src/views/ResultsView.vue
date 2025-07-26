@@ -1,8 +1,12 @@
 <template>
   <div v-if="hangout">
-    <header class="page-header">
+    <header class="page-header" style="padding: 0 1rem;">
       <router-link :to="{ name: 'hangout', params: { id: hangout.id } }"><button class="btn-back">&lt;</button></router-link>
-      <h1>Results</h1>
+      <div style="text-align: left; flex-grow: 1; padding-left: 10px;">
+        <h1>Results</h1>
+      </div>
+
+      <img src="/logo.png" alt="EZsplit Logo" style="height: 60px; padding: 5px 0" />
     </header>
 
     <div class="page-content">
@@ -70,7 +74,22 @@ export default {
         this.currency = loadCurrency();
         this.loadAndCalculate();
     },
+    mounted() {
+        window.addEventListener('scroll', this.handleScroll);
+    },
+    beforeUnmount() {
+        window.removeEventListener('scroll', this.handleScroll);
+    },
     methods: {
+        handleScroll() {
+            const header = document.querySelector('.page-header');
+            if (window.scrollY > 50) {
+                header?.classList.add('translucent');
+            } else {
+                header?.classList.remove('translucent');
+            }
+        },
+        
         displayAmount(amount) { return formatCurrency(amount, this.currency); },
         loadAndCalculate() {
             const hangouts = JSON.parse(localStorage.getItem('split_bill_hangouts') || '[]');
@@ -227,9 +246,23 @@ export default {
         }
     }
 }
+
+
 </script>
 
 <style scoped>
+.page-header {
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 999;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: opacity 0.5s ease;
+}
+.page-header.translucent {
+  opacity: 75%;
+  backdrop-filter: blur(6px);
+}
 .btn-back { background: var(--secondary); color: var(--white); border-radius: 50%; width: 40px; height: 40px; padding: 0; font-size: 1.5rem; line-height: 1; }
 .total-summary { text-align: center; background-color: var(--primary); color: var(--white); }
 .total-summary h2 { margin: 0 0 8px; font-weight: 500; }

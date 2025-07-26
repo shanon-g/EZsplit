@@ -1,11 +1,16 @@
 <template>
   <div v-if="hangout">
-    <header class="page-header">
-      <router-link to="/"><button class="btn-back">&lt;</button></router-link>
-      <div>
-        <h1>{{ hangout.name }}</h1>
-        <p style="margin:0; opacity: 0.8;">{{ new Date(hangout.date).toLocaleDateString() }}</p>
+    <header class="page-header" style="padding: 0 1rem;">
+      <router-link to="/">
+        <button class="btn-back">&lt;</button>
+      </router-link>
+
+      <div style="text-align: left; flex-grow: 1; padding-left: 10px;">
+        <h1 style="margin: 0;">{{ hangout.name }}</h1>
+        <p style="margin: 0; opacity: 0.8;">{{ new Date(hangout.date).toLocaleDateString() }}</p>
       </div>
+
+      <img src="/logo.png" alt="EZsplit Logo" style="height: 60px; padding: 5px 0" />
     </header>
 
     <div class="page-content">
@@ -80,7 +85,22 @@ export default {
     this.currency = loadCurrency();
     this.loadHangout();
   },
+  mounted() {
+    window.addEventListener('scroll', this.handleScroll);
+  },
+  beforeUnmount() {
+    window.removeEventListener('scroll', this.handleScroll);
+  },
   methods: {
+    handleScroll() {
+      const header = document.querySelector('.page-header');
+      if (window.scrollY > 50) {
+          header?.classList.add('translucent');
+      } else {
+          header?.classList.remove('translucent');
+      }
+    },
+    
     displayAmount(amount) {
       return formatCurrency(amount, this.currency);
     },
@@ -143,6 +163,18 @@ export default {
 </script>
 
 <style scoped>
+.page-header {
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 999;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: opacity 0.5s ease;
+}
+.page-header.translucent {
+  opacity: 75%;
+  backdrop-filter: blur(6px);
+}
 .btn-back { background: var(--secondary); color: var(--white); border-radius: 50%; width: 40px; height: 40px; padding: 0; font-size: 1.5rem; line-height: 1; }
 .list-item, .list-item-clickable { display: flex; justify-content: space-between; align-items: center; padding: 12px; background-color: var(--base); border-radius: 8px; margin-bottom: 8px; }
 .list-item-clickable { cursor: pointer; }
