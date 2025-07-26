@@ -9,6 +9,7 @@
     </header>
 
     <div class="page-content">
+        <!-- ... Toggles and Charges Breakdown cards ... (No changes here) -->
         <div class="card">
           <div class="tax-toggle-wrapper">
             <label class="tax-toggle-label">This category includes tax</label>
@@ -65,9 +66,18 @@
                 <option v-for="person in hangout.people" :key="person.id" :value="person.id">{{ person.name }}</option>
             </select>
         </div>
-        
+
+        <!-- NEW: Equal Split Card -->
         <div class="card">
-            <h2>Individual Items (Subtotal)</h2>
+            <h2>Quick Actions</h2>
+            <button @click="openEqualSplitDialog" class="btn-secondary" style="width:100%;">Split Subtotal Equally</button>
+        </div>
+
+        <div class="card">
+            <h2>Item Breakdown (Subtotal)</h2>
+            <div v-if="category.items.length === 0" class="empty-state">
+                <p>No items added yet. Add items manually or use the equal split action.</p>
+            </div>
             <div v-for="item in category.items" :key="item.id" class="list-item">
                 <div class="item-info">
                     <span>{{ getPersonName(item.personId) }}</span>
@@ -101,6 +111,23 @@
     </div>
 
     <!-- Dialogs -->
+    <div v-if="showEqualSplitDialog" class="dialog-overlay" @click.self="showEqualSplitDialog = false">
+        <div class="dialog-content">
+            <div class="dialog-header">
+                <h3>Select People to Split With</h3>
+                <button @click="showEqualSplitDialog = false" class="close-btn">&times;</button>
+            </div>
+            <div class="people-checklist">
+                <div v-for="person in hangout.people" :key="person.id" class="checklist-item">
+                    <input type="checkbox" :id="'person-' + person.id" :value="person.id" v-model="selectedPeopleForSplit">
+                    <label :for="'person-' + person.id">{{ person.name }}</label>
+                </div>
+            </div>
+            <button @click="confirmEqualSplit" class="btn-primary" style="width: 100%; margin-top: 16px;">Confirm Split</button>
+        </div>
+    </div>
+
+    <!-- ... other dialogs ... -->
     <AssignItemsDialog 
         v-if="showAssignDialog" 
         :scannedItems="scannedItems"
@@ -156,6 +183,8 @@ export default {
             editingItem: null,
             showAssignDialog: false,
             scannedItems: [],
+            showEqualSplitDialog: false,
+            selectedPeopleForSplit: [],
         }
     },
     computed: {
@@ -260,6 +289,31 @@ export default {
             this.saveHangout();
             this.showAssignDialog = false;
             this.scannedItems = [];
+        },
+
+        openEqualSplitDialog() {
+            // Pre-select people part of an item
+            const currentParticipants = [...new Set(this.category.items.map(item => item.personId))];
+            this.selectedPeopleForSplit = currentParticipants.length > 0 ? currentParticipants : this.hangout.people.map(p => p.id);
+            this.showEqualSplitDialog = true;
+        },
+        confirmEqualSplit() {
+            if (this.selectedPeopleForSplit.length === 0) {
+                alert("Please select at least one person to split with.");
+                return;
+            }
+            const numPeople = this.selectedPeopleForSplit.length;
+            const subtotalPerPerson = this.category.subtotal / numPeople;
+
+            // Overwrite existing items with the equal split
+            this.category.items = this.selectedPeopleForSplit.map(personId => ({
+                id: uuidv4(),
+                personId: personId,
+                amount: subtotalPerPerson
+            }));
+
+            this.saveHangout();
+            this.showEqualSplitDialog = false;
         },
     }
 }

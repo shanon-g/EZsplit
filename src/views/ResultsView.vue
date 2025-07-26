@@ -77,56 +77,132 @@ export default {
             this.hangout = hangouts.find(h => h.id === this.$route.params.id);
             if (this.hangout) { this.calculateSummaries(); this.calculateTransactions(); }
         },
+        
         calculateSummaries() {
             this.summaries = this.hangout.people.map(person => {
-                const subtotalSpent = this.hangout.categories.reduce((sum, cat) => sum + cat.items.filter(item => item.personId === person.id).reduce((itemSum, item) => itemSum + item.amount, 0), 0);
-                
-                const additionalChargesSpent = this.hangout.categories.reduce((sum, cat) => {
+                let totalSpent = 0;
+                let totalPaid = 0;
+
+                // Loop through each category
+                this.hangout.categories.forEach(cat => {
+                    // Calculate what this person PAID for this category
+                    if (cat.paidBy === person.id) {
+                        totalPaid += cat.totalAmount;
+                    }
+
+                    // Create a list of unique people who have items in this category
                     const participants = [...new Set(cat.items.map(item => item.personId))];
-                    if (!participants.includes(person.id)) return sum;
+                    if (!participants.includes(person.id)) {
+                        return; // Skip person if no items in this category
+                    }
+
+                    // 1. Person's share of the items (subtotal)
+                    const itemsSubtotalForPerson = cat.items
+                        .filter(item => item.personId === person.id)
+                        .reduce((sum, item) => sum + item.amount, 0);
                     
-                    let personCharge = 0;
+                    let personSpentInCategory = itemsSubtotalForPerson;
+
+                    // 2. Person's share of charges for this category
                     const numParticipants = participants.length;
                     
+                    // Proportional tax share
                     if (cat.hasTax && cat.subtotal > 0) {
-                        const personSubtotal = cat.items.filter(item => item.personId === person.id).reduce((itemSum, item) => itemSum + item.amount, 0);
                         const totalCharges = cat.totalAmount - cat.subtotal;
                         const otherCharges = (cat.hasService ? cat.serviceCharge : 0) + (cat.hasDelivery ? cat.deliveryCharge : 0);
                         const actualTax = Math.max(0, totalCharges - otherCharges);
-                        personCharge += (personSubtotal / cat.subtotal) * actualTax;
+                        personSpentInCategory += (itemsSubtotalForPerson / cat.subtotal) * actualTax;
                     }
 
-                    if (cat.hasService) personCharge += cat.serviceCharge / numParticipants;
-                    if (cat.hasDelivery) personCharge += cat.deliveryCharge / numParticipants;
-
-                    return sum + personCharge;
-                }, 0);
+                    // Equal service & delivery share
+                    if (cat.hasService) personSpentInCategory += cat.serviceCharge / numParticipants;
+                    if (cat.hasDelivery) personSpentInCategory += cat.deliveryCharge / numParticipants;
+                    
+                    totalSpent += personSpentInCategory;
+                });
                 
-                const paid = this.hangout.categories
-                    .filter(cat => cat.paidBy === person.id)
-                    .reduce((sum, cat) => sum + cat.totalAmount, 0);
-                
-                const totalSpent = subtotalSpent + additionalChargesSpent;
-                return { id: person.id, name: person.name, spent: totalSpent, paid, balance: paid - totalSpent };
+                return { 
+                    id: person.id, 
+                    name: person.name, 
+                    spent: totalSpent, 
+                    paid: totalPaid, 
+                    balance: totalPaid - totalSpent 
+                };
             });
         },
+
         calculateTransactions() {
-            let balances = JSON.parse(JSON.stringify(this.summaries));
-            let debtors = balances.filter(p => p.balance < 0);
-            let creditors = balances.filter(p => p.balance > 0);
-            let transactions = [];
-            debtors.forEach(debtor => {
-                while (Math.abs(debtor.balance) > 0.01) {
-                    let creditor = creditors.find(c => c.balance > 0.01);
-                    if (!creditor) break;
-                    const amount = Math.min(Math.abs(debtor.balance), creditor.balance);
-                    transactions.push({ from: debtor.name, to: creditor.name, amount: amount });
-                    debtor.balance += amount;
-                    creditor.balance -= amount;
+            let transactionsMap = {};
+
+            // 1. Build transactions normally (from categories)
+            this.hangout.categories.forEach(cat => {
+                const participants = cat.splitWith?.length > 0
+                ? cat.splitWith
+                : [...new Set(cat.items.map(item => item.personId))];
+
+                const numParticipants = participants.length;
+                if (numParticipants === 0) return;
+
+                const payer = this.hangout.people.find(p => p.id === cat.paidBy);
+                if (!payer) return;
+
+                participants.forEach(participantId => {
+                if (participantId === cat.paidBy) return;
+
+                const participant = this.hangout.people.find(p => p.id === participantId);
+                if (!participant) return;
+
+                const itemsSubtotalForPerson = (cat.items || [])
+                    .filter(item => item.personId === participantId)
+                    .reduce((sum, item) => sum + item.amount, 0);
+
+                let personShare = itemsSubtotalForPerson;
+
+                if (cat.hasTax && cat.subtotal > 0) {
+                    const totalCharges = cat.totalAmount - cat.subtotal;
+                    const otherCharges = (cat.hasService ? cat.serviceCharge : 0) + (cat.hasDelivery ? cat.deliveryCharge : 0);
+                    const taxAmount = Math.max(0, totalCharges - otherCharges);
+                    personShare += (itemsSubtotalForPerson / cat.subtotal) * taxAmount;
+                }
+
+                if (cat.hasService) personShare += cat.serviceCharge / numParticipants;
+                if (cat.hasDelivery) personShare += cat.deliveryCharge / numParticipants;
+
+                const amount = Math.round(personShare * 100) / 100;
+                const key = `${participant.name}->${payer.name}`;
+                transactionsMap[key] = (transactionsMap[key] || 0) + amount;
+                });
+            });
+
+            // 2. Normalize bidirectional debts
+            const normalizedMap = {};
+
+            Object.entries(transactionsMap).forEach(([key, amount]) => {
+                const [from, to] = key.split("->");
+                const reverseKey = `${to}->${from}`;
+
+                if (normalizedMap[reverseKey]) {
+                const reverseAmount = normalizedMap[reverseKey];
+                if (reverseAmount > amount) {
+                    normalizedMap[reverseKey] = Math.round((reverseAmount - amount) * 100) / 100;
+                } else if (reverseAmount < amount) {
+                    normalizedMap[key] = Math.round((amount - reverseAmount) * 100) / 100;
+                    delete normalizedMap[reverseKey];
+                } else {
+                    delete normalizedMap[reverseKey];
+                }
+                } else {
+                normalizedMap[key] = amount;
                 }
             });
-            this.transactions = transactions;
-        },
+
+            // 3. Convert to array of transactions
+            this.transactions = Object.entries(normalizedMap).map(([key, amount]) => {
+                const [from, to] = key.split("->");
+                return { from, to, amount };
+            });
+            },
+
         saveAsText() {
             const lines = [];
             lines.push(`Bill Splitting Results for: ${this.hangout.name}`);
