@@ -81,14 +81,17 @@
             </div>
             <div v-for="item in category.items" :key="item.id" class="list-item">
                 <div class="item-info">
-                    <span>{{ getPersonName(item.personId) }}</span>
-                    <span class="item-amount">{{ displayAmount(item.amount) }}</span>
+                    <span class="item-description">{{ getPersonName(item.personId) }} - {{ item.description || 'Item' }}</span>
+                    <span class="item-amount">{{ displayAmount(item.amount) }} <small v-if="item.description"></small></span>
                 </div>
                 <div class="item-actions">
-                    <button @click="openEditDialog(item)" class="btn-edit">
+                    <button @click="openSplitItemDialog(item)" class="btn-edit" title="Split this item">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><path d="M18 8a4 4 0 0 1 4 4v2"></path><path d="M22 18a4 4 0 0 1-4-4"></path></svg>
+                    </button>
+                    <button @click="openEditDialog(item)" class="btn-edit" title="Edit item">
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                     </button>
-                    <button @click="removeItem(item.id)" class="btn-remove">&times;</button>
+                    <button @click="removeItem(item.id)" class="btn-remove" title="Remove item">&times;</button>
                 </div>
             </div>
             <button @click="showAddItemDialog = true" class="btn-secondary" style="width:100%; margin-top: 16px;">+ Add Item Manually</button>
@@ -100,7 +103,16 @@
             <div v-for="personSummary in splitSummary" :key="personSummary.personId" class="summary-item">
                 <h3>{{ personSummary.personName }}</h3>
                 <div class="summary-details">
-                    <div><span>Items Subtotal:</span> {{ displayAmount(personSummary.itemsSubtotal) }}</div>
+                    <!-- Nested loop for individual items -->
+                    <template v-for="(item, index) in personSummary.items" :key="item.id">
+                        <div class="summary-sub-item">
+                            <span>{{ item.description || 'Item' }}:</span>
+                            <span>{{ displayAmount(item.amount) }}</span>
+                        </div>
+                        <hr v-if="index < personSummary.items.length - 1" class="divider-light">
+                    </template>
+                    <hr v-if="personSummary.items.length > 0" class="divider-light">
+                    
                     <div v-if="category.hasTax"><span>Tax Share:</span> {{ displayAmount(personSummary.taxShare) }}</div>
                     <div v-if="category.hasService"><span>Service Share:</span> {{ displayAmount(personSummary.serviceShare) }}</div>
                     <div v-if="category.hasDelivery"><span>Delivery Share:</span> {{ displayAmount(personSummary.deliveryShare) }}</div>
@@ -112,6 +124,27 @@
     </div>
 
     <!-- Dialogs -->
+    <div v-if="showSplitItemDialog" class="dialog-overlay" @click.self="showSplitItemDialog = false">
+        <div class="dialog-content">
+            <div class="dialog-header">
+                <h3>Split Item</h3>
+                <button @click="showSplitItemDialog = false" class="close-btn">&times;</button>
+            </div>
+            <div v-if="itemToSplit" class="item-to-split-info">
+                <p><strong>Item:</strong> {{ itemToSplit.description }}</p>
+                <p><strong>Total Amount:</strong> {{ displayAmount(itemToSplit.amount) }}</p>
+            </div>
+            <p>Select people to split this item with:</p>
+            <div class="people-checklist">
+                <div v-for="person in hangout.people" :key="person.id" class="checklist-item">
+                    <input type="checkbox" :id="'split-person-' + person.id" :value="person.id" v-model="selectedPeopleForItemSplit">
+                    <label :for="'split-person-' + person.id">{{ person.name }}</label>
+                </div>
+            </div>
+            <button @click="confirmItemSplit" class="btn-primary" style="width: 100%; margin-top: 16px;">Confirm Split</button>
+        </div>
+    </div>
+
     <div v-if="showEqualSplitDialog" class="dialog-overlay" @click.self="showEqualSplitDialog = false">
         <div class="dialog-content">
             <div class="dialog-header">
@@ -138,6 +171,7 @@
      <div v-if="showAddItemDialog" class="dialog-overlay" @click.self="showAddItemDialog = false">
       <div class="dialog-content">
         <h3>Add Item (Amount before charges)</h3>
+        <input type="text" v-model="newItemDescription" placeholder="Item Name (Optional)" style="margin-bottom: 8px;">
         <select v-model="newItemPersonId" class="payer-select" style="margin-bottom: 8px;">
             <option value="">Select Person</option>
             <option v-for="person in hangout.people" :key="person.id" :value="person.id">{{ person.name }}</option>
@@ -179,12 +213,16 @@ export default {
             showAddItemDialog: false,
             newItemPersonId: '',
             newItemAmount: '',
+            newItemDescription: '',
             showEditItemDialog: false,
             editingItem: null,
             showAssignDialog: false,
             scannedItems: [],
             showEqualSplitDialog: false,
             selectedPeopleForSplit: [],
+            showSplitItemDialog: false,
+            itemToSplit: null,
+            selectedPeopleForItemSplit: [],
         }
     },
     computed: {
@@ -201,18 +239,38 @@ export default {
             return Math.max(0, totalCharges - otherCharges);
         },
         splitSummary() {
-            if (!this.category || this.category.items.length === 0) return [];
+            if (!this.category || !this.category.items || this.category.items.length === 0) {
+                return [];
+            }
+            
             const participants = [...new Set(this.category.items.map(item => item.personId))];
             const numParticipants = participants.length;
+
             return participants.map(personId => {
                 const person = this.hangout.people.find(p => p.id === personId);
-                const itemsSubtotal = this.category.items.filter(item => item.personId === personId).reduce((sum, item) => sum + item.amount, 0);
+                const personItems = this.category.items.filter(item => item.personId === personId);
+                const itemsSubtotal = personItems.reduce((sum, item) => sum + item.amount, 0);
+                
                 let taxShare = 0;
-                if (this.category.hasTax && this.category.subtotal > 0) { taxShare = (itemsSubtotal / this.category.subtotal) * this.actualTax; }
+                if (this.category.hasTax && this.category.subtotal > 0) {
+                    taxShare = (itemsSubtotal / this.category.subtotal) * this.actualTax;
+                }
+
                 const serviceShare = this.category.hasService ? this.category.serviceCharge / numParticipants : 0;
                 const deliveryShare = this.category.hasDelivery ? this.category.deliveryCharge / numParticipants : 0;
+                
                 const personTotal = itemsSubtotal + taxShare + serviceShare + deliveryShare;
-                return { personId, personName: person ? person.name : 'Unknown', itemsSubtotal, taxShare, serviceShare, deliveryShare, personTotal };
+
+                return {
+                    personId,
+                    personName: person ? person.name : 'Unknown',
+                    items: personItems,
+                    itemsSubtotal,
+                    taxShare,
+                    serviceShare,
+                    deliveryShare,
+                    personTotal
+                };
             });
         }
     },
@@ -252,12 +310,71 @@ export default {
         },
         getPersonName(personId) { const person = this.hangout.people.find(p => p.id === personId); return person ? person.name : 'Unknown'; },
         addItem() {
-            if (!this.newItemPersonId || !this.newItemAmount) return;
-            this.category.items.push({ id: uuidv4(), personId: this.newItemPersonId, amount: parseFloat(this.newItemAmount) });
+            if (!this.newItemPersonId || !this.newItemAmount) return; 
+            
+            this.category.items.push({ 
+                id: uuidv4(), 
+                personId: this.newItemPersonId, 
+                amount: parseFloat(this.newItemAmount), 
+                description: this.newItemDescription.trim() || 'Item' 
+            });
+
             this.saveHangout();
+            
             this.newItemPersonId = '';
             this.newItemAmount = '';
+            this.newItemDescription = '';
             this.showAddItemDialog = false;
+        },
+        handleSaveAssignments(assignedItems) {
+            assignedItems.forEach(assignedItem => {
+                this.category.items.push({
+                    id: uuidv4(),
+                    personId: assignedItem.personId,
+                    amount: assignedItem.total,
+                    description: assignedItem.description,
+                });
+            });
+            this.saveHangout();
+            this.showAssignDialog = false;
+            this.scannedItems = [];
+        },
+        openSplitItemDialog(item) {
+            this.itemToSplit = item;
+            // Pre-select the person the item is currently assigned to
+            this.selectedPeopleForItemSplit = [item.personId];
+            this.showSplitItemDialog = true;
+        },
+        confirmItemSplit() {
+            if (!this.itemToSplit || this.selectedPeopleForItemSplit.length === 0) {
+                alert("Please select at least one person.");
+                return;
+            }
+
+            const numPeople = this.selectedPeopleForItemSplit.length;
+            const originalAmount = this.itemToSplit.amount;
+            const splitAmount = originalAmount / numPeople;
+            const originalDescription = this.itemToSplit.description;
+
+            // Remove the original item
+            const itemIndex = this.category.items.findIndex(i => i.id === this.itemToSplit.id);
+            if (itemIndex > -1) {
+                this.category.items.splice(itemIndex, 1);
+            }
+
+            // Add the new split items
+            this.selectedPeopleForItemSplit.forEach(personId => {
+                this.category.items.push({
+                    id: uuidv4(),
+                    personId: personId,
+                    amount: splitAmount,
+                    description: originalDescription,
+                });
+            });
+            
+            this.saveHangout();
+            this.showSplitItemDialog = false;
+            this.itemToSplit = null;
         },
         removeItem(itemId) {
             this.category.items = this.category.items.filter(item => item.id !== itemId);
@@ -291,18 +408,6 @@ export default {
             }
             this.scannedItems = scannedItems;
             this.showAssignDialog = true;
-        },
-        handleSaveAssignments(assignedItems) {
-            assignedItems.forEach(assignedItem => {
-                this.category.items.push({
-                    id: uuidv4(),
-                    personId: assignedItem.personId,
-                    amount: assignedItem.total,
-                });
-            });
-            this.saveHangout();
-            this.showAssignDialog = false;
-            this.scannedItems = [];
         },
 
         openEqualSplitDialog() {
@@ -365,4 +470,34 @@ export default {
 .summary-item { padding: 12px; background-color: var(--base); border-radius: 8px; margin-bottom: 8px; }
 .summary-item h3 { margin: 0 0 8px; }
 .summary-details > div { display: flex; justify-content: space-between; }
+
+.item-description { font-weight: 500; }
+.item-amount small { font-weight: 400; color: var(--tertiary); }
+.people-checklist { max-height: 40vh; overflow-y: auto; }
+.checklist-item { display: flex; align-items: center; padding: 8px; }
+.checklist-item input { width: 20px; height: 20px; margin-right: 12px; }
+.checklist-item label { font-size: 1.1rem; }
+.item-to-split-info {
+    padding: 12px;
+    background-color: var(--base);
+    border-radius: 8px;
+    margin-bottom: 16px;
+}
+.item-to-split-info p {
+    margin: 4px 0;
+}
+
+.summary-details > div { display: flex; justify-content: space-between; }
+.summary-sub-item {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9rem;
+    color: var(--tertiary);
+    padding-left: 16px;
+}
+.divider-light {
+    margin: 8px 0;
+    border: none;
+    border-top: 1px solid #92909c; 
+}
 </style>

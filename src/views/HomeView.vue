@@ -14,10 +14,18 @@
       <h2>Previous Hangouts</h2>
       <div v-if="hangouts.length === 0" class="card"><p>No hangouts yet. Create your first one!</p></div>
       <div v-else>
-        <div v-for="hangout in hangouts" :key="hangout.id" class="card" @click="goToHangout(hangout.id)">
+        <div v-for="hangout in hangouts" :key="hangout.id" class="card">
           <div class="hangout-item">
-            <div><h3>{{ hangout.name }}</h3><p class="date">{{ new Date(hangout.date).toLocaleDateString() }}</p></div>
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            <div class="hangout-info" @click="goToHangout(hangout.id)">
+              <h3>{{ hangout.name }}</h3>
+              <p class="date">{{ new Date(hangout.date).toLocaleDateString() }}</p>
+            </div>
+            <div class="hangout-actions">
+              <button @click.stop="removeHangout(hangout.id)" class="btn-delete-hangout" title="Delete Hangout">
+                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+              </button>
+              <svg @click="goToHangout(hangout.id)" class="arrow-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </div>
           </div>
         </div>
       </div>
@@ -112,6 +120,12 @@ export default {
     goToHangout(id) {
       this.$router.push({ name: 'hangout', params: { id } });
     },
+    removeHangout(id) {
+      if (confirm("Are you sure you want to delete this hangout? This action cannot be undone.")) {
+          this.hangouts = this.hangouts.filter(hangout => hangout.id !== id);
+          this.saveHangouts();
+      }
+    },
     saveCurrency() {
       localStorage.setItem('split_bill_currency', this.currency);
     }
@@ -131,6 +145,20 @@ export default {
 .page-header.translucent {
   opacity: 75%;
   backdrop-filter: blur(6px);
+}
+.btn-delete-hangout {
+    background: none;
+    border: none;
+    color: var(--danger);
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 50%;
+    align-items: center;
+    justify-content: center;
+    margin-right: 20px;
+}
+.btn-delete-hangout:hover {
+    background-color: #fee2e2;
 }
 .hangout-item { display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
 .hangout-item h3 { margin: 0; }
