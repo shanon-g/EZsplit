@@ -12,6 +12,13 @@
 <script>
 export default {
   name: 'ReceiptScanner',
+  props: {
+    currency: {
+      type: String,
+      required: true,
+      default: 'IDR'
+    }
+  },
   data() {
     return {
       isLoading: false,
@@ -38,7 +45,7 @@ export default {
       formData.append('document', file);
 
       try {
-        const response = await fetch("POST https://api.mindee.net/v1/products/mindee/expense_receipts/v5/predict", {
+        const response = await fetch("https://api.mindee.net/v1/products/mindee/expense_receipts/v5/predict", {
           method: "POST",
           headers: {
             "Authorization": `Token ${this.apiKey}`,
@@ -47,25 +54,31 @@ export default {
         });
 
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.api_request.error.message);
+            const errorData = await response.json().catch(() => null);
+            if (errorData && errorData.api_request && errorData.api_request.error) {
+                 throw new Error(errorData.api_request.error.message);
+            }
+            throw new Error(`The server returned an unexpected response. Status: ${response.status}. Please check your API key.`);
         }
 
         const result = await response.json();
         const receipt = result.document.inference.prediction;
 
-        const parsedData = {
-            items: receipt.line_items.map(item => ({
-                description: item.description,
-                quantity: item.quantity,
-                total: item.total_amount,
-                id: Math.random().toString(36).substring(2, 9) 
-            })),
-            total: receipt.total_amount.value || 0,
-            tax: receipt.total_tax.value || 0,
+        const applyIdrCorrection = (value) => {
+            if (this.currency === 'IDR' && value > 0 && value < 1000) {
+                return value * 1000;
+            }
+            return value;
         };
+
+        const scannedItems = receipt.line_items.map(item => ({
+            description: item.description,
+            quantity: item.quantity,
+            total: applyIdrCorrection(item.total_amount), 
+            id: Math.random().toString(36).substring(2, 9) 
+        }));
         
-        this.$emit('scan-complete', parsedData);
+        this.$emit('scan-complete', scannedItems);
 
       } catch (error) {
         console.error('OCR Error:', error);

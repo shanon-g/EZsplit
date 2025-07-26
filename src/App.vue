@@ -9,7 +9,7 @@
 
     <!-- Ad Banner -->
     <div class="ad-banner">
-      <p>Ad Space</p>
+      <p>by shn</p>
     </div>
 
     <!-- Calculator Dialog -->

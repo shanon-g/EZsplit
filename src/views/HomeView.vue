@@ -83,7 +83,7 @@ export default {
         id: uuidv4(),
         name: this.newHangoutName.trim(),
         date: new Date(),
-        taxRate: 0, // Only tax rate is set at the hangout level
+        taxRate: 0,
         people: [],
         categories: [],
       };

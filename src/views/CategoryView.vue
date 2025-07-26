@@ -65,7 +65,7 @@
                 <option v-for="person in hangout.people" :key="person.id" :value="person.id">{{ person.name }}</option>
             </select>
         </div>
-
+        
         <div class="card">
             <h2>Individual Items (Subtotal)</h2>
             <div v-for="item in category.items" :key="item.id" class="list-item">
@@ -80,9 +80,8 @@
                     <button @click="removeItem(item.id)" class="btn-remove">&times;</button>
                 </div>
             </div>
-            <button @click="showAddItemDialog = true" class="btn-secondary" style="width:100%; margin-top: 16px;">+ Add Item</button>
-        
-            <ReceiptScanner @scan-complete="handleScanComplete" />
+            <button @click="showAddItemDialog = true" class="btn-secondary" style="width:100%; margin-top: 16px;">+ Add Item Manually</button>
+            <ReceiptScanner @scan-complete="handleScanComplete" :currency="currency" />
         </div>
         
         <div v-if="splitSummary.length > 0" class="card">
@@ -101,8 +100,15 @@
         </div>
     </div>
 
-    <!-- Add Item Dialog -->
-    <div v-if="showAddItemDialog" class="dialog-overlay" @click.self="showAddItemDialog = false">
+    <!-- Dialogs -->
+    <AssignItemsDialog 
+        v-if="showAssignDialog" 
+        :scannedItems="scannedItems"
+        :people="hangout.people"
+        @close="showAssignDialog = false"
+        @save-assignments="handleSaveAssignments"
+    />
+     <div v-if="showAddItemDialog" class="dialog-overlay" @click.self="showAddItemDialog = false">
       <div class="dialog-content">
         <h3>Add Item (Amount before charges)</h3>
         <select v-model="newItemPersonId" class="payer-select" style="margin-bottom: 8px;">
@@ -113,8 +119,6 @@
         <button @click="addItem" class="btn-primary" style="width: 100%; margin-top: 16px;">Add Item</button>
       </div>
     </div>
-
-    <!-- Edit Item Dialog -->
     <div v-if="showEditItemDialog" class="dialog-overlay" @click.self="showEditItemDialog = false">
       <div v-if="editingItem" class="dialog-content">
         <h3>Edit Item</h3>
@@ -125,14 +129,6 @@
         <button @click="updateItem" class="btn-primary" style="width: 100%; margin-top: 16px;">Save Changes</button>
       </div>
     </div>
-
-    <AssignItemsDialog 
-        v-if="showAssignDialog" 
-        :scannedItems="scannedItems"
-        :people="hangout.people"
-        @close="showAssignDialog = false"
-        @save-assignments="handleSaveAssignments"
-    />
   </div>
 </template>
 
@@ -225,7 +221,7 @@ export default {
             this.saveHangout();
         },
         openEditDialog(item) {
-            this.editingItem = JSON.parse(JSON.stringify(item)); // Create a deep copy to avoid reactivity issues
+            this.editingItem = JSON.parse(JSON.stringify(item));
             this.showEditItemDialog = true;
         },
         updateItem() {
@@ -245,21 +241,12 @@ export default {
                 this.category.subtotal = this.category.totalAmount;
             }
         },
-
-        // OCR LOGIC
-        handleScanComplete(parsedData) {
-            if (!parsedData || parsedData.items.length === 0) {
+        handleScanComplete(scannedItems) {
+            if (!scannedItems || scannedItems.length === 0) {
                 alert('Could not find any items on the receipt. Please try again.');
                 return;
             }
-            // Update category totals from the scan
-            this.category.totalAmount = parsedData.total;
-            this.category.subtotal = parsedData.total - parsedData.tax;
-            if (parsedData.tax > 0) {
-                this.category.hasTax = true;
-                this.category.actualTax = parsedData.tax;
-            }
-            this.scannedItems = parsedData.items;
+            this.scannedItems = scannedItems;
             this.showAssignDialog = true;
         },
         handleSaveAssignments(assignedItems) {
@@ -268,7 +255,6 @@ export default {
                     id: uuidv4(),
                     personId: assignedItem.personId,
                     amount: assignedItem.total,
-                    // Note: 'description' from scan is not saved, but could be added
                 });
             });
             this.saveHangout();
