@@ -69,13 +69,20 @@
         <div class="card">
             <h2>Individual Items (Subtotal)</h2>
             <div v-for="item in category.items" :key="item.id" class="list-item">
-                <span>{{ getPersonName(item.personId) }}</span>
-                <span>{{ displayAmount(item.amount) }}</span>
+                <div class="item-info">
+                    <span>{{ getPersonName(item.personId) }}</span>
+                    <span class="item-amount">{{ displayAmount(item.amount) }}</span>
+                </div>
+                <div class="item-actions">
+                    <button @click="openEditDialog(item)" class="btn-edit">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                    </button>
+                    <button @click="removeItem(item.id)" class="btn-remove">&times;</button>
+                </div>
             </div>
             <button @click="showAddItemDialog = true" class="btn-secondary" style="width:100%; margin-top: 16px;">+ Add Item</button>
         </div>
         
-        <!-- NEW: Split Summary Card -->
         <div v-if="splitSummary.length > 0" class="card">
             <h2>Split Summary</h2>
             <div v-for="personSummary in splitSummary" :key="personSummary.personId" class="summary-item">
@@ -92,6 +99,7 @@
         </div>
     </div>
 
+    <!-- Add Item Dialog -->
     <div v-if="showAddItemDialog" class="dialog-overlay" @click.self="showAddItemDialog = false">
       <div class="dialog-content">
         <h3>Add Item (Amount before charges)</h3>
@@ -101,6 +109,18 @@
         </select>
         <input type="number" v-model="newItemAmount" placeholder="Amount">
         <button @click="addItem" class="btn-primary" style="width: 100%; margin-top: 16px;">Add Item</button>
+      </div>
+    </div>
+
+    <!-- Edit Item Dialog -->
+    <div v-if="showEditItemDialog" class="dialog-overlay" @click.self="showEditItemDialog = false">
+      <div v-if="editingItem" class="dialog-content">
+        <h3>Edit Item</h3>
+        <select v-model="editingItem.personId" class="payer-select" style="margin-bottom: 8px;">
+            <option v-for="person in hangout.people" :key="person.id" :value="person.id">{{ person.name }}</option>
+        </select>
+        <input type="number" v-model.number="editingItem.amount" placeholder="Amount">
+        <button @click="updateItem" class="btn-primary" style="width: 100%; margin-top: 16px;">Save Changes</button>
       </div>
     </div>
   </div>
@@ -120,6 +140,8 @@ export default {
             showAddItemDialog: false,
             newItemPersonId: '',
             newItemAmount: '',
+            showEditItemDialog: false,
+            editingItem: null,
         }
     },
     computed: {
@@ -133,39 +155,21 @@ export default {
             let otherCharges = 0;
             if (this.category.hasService) otherCharges += this.category.serviceCharge;
             if (this.category.hasDelivery) otherCharges += this.category.deliveryCharge;
-            return Math.max(0, totalCharges - otherCharges); // Ensure it's not negative
+            return Math.max(0, totalCharges - otherCharges);
         },
         splitSummary() {
             if (!this.category || this.category.items.length === 0) return [];
-            
             const participants = [...new Set(this.category.items.map(item => item.personId))];
             const numParticipants = participants.length;
-
             return participants.map(personId => {
                 const person = this.hangout.people.find(p => p.id === personId);
-                const itemsSubtotal = this.category.items
-                    .filter(item => item.personId === personId)
-                    .reduce((sum, item) => sum + item.amount, 0);
-                
+                const itemsSubtotal = this.category.items.filter(item => item.personId === personId).reduce((sum, item) => sum + item.amount, 0);
                 let taxShare = 0;
-                if (this.category.hasTax && this.category.subtotal > 0) {
-                    taxShare = (itemsSubtotal / this.category.subtotal) * this.actualTax;
-                }
-
+                if (this.category.hasTax && this.category.subtotal > 0) { taxShare = (itemsSubtotal / this.category.subtotal) * this.actualTax; }
                 const serviceShare = this.category.hasService ? this.category.serviceCharge / numParticipants : 0;
                 const deliveryShare = this.category.hasDelivery ? this.category.deliveryCharge / numParticipants : 0;
-                
                 const personTotal = itemsSubtotal + taxShare + serviceShare + deliveryShare;
-
-                return {
-                    personId,
-                    personName: person ? person.name : 'Unknown',
-                    itemsSubtotal,
-                    taxShare,
-                    serviceShare,
-                    deliveryShare,
-                    personTotal
-                };
+                return { personId, personName: person ? person.name : 'Unknown', itemsSubtotal, taxShare, serviceShare, deliveryShare, personTotal };
             });
         }
     },
@@ -198,6 +202,23 @@ export default {
             this.newItemAmount = '';
             this.showAddItemDialog = false;
         },
+        removeItem(itemId) {
+            this.category.items = this.category.items.filter(item => item.id !== itemId);
+            this.saveHangout();
+        },
+        openEditDialog(item) {
+            this.editingItem = JSON.parse(JSON.stringify(item)); // Create a deep copy to avoid reactivity issues
+            this.showEditItemDialog = true;
+        },
+        updateItem() {
+            const index = this.category.items.findIndex(item => item.id === this.editingItem.id);
+            if (index !== -1) {
+                this.category.items[index] = this.editingItem;
+            }
+            this.saveHangout();
+            this.showEditItemDialog = false;
+            this.editingItem = null;
+        },
         toggleTax() { this.category.hasTax = !this.category.hasTax; this.updateSubtotal(); this.saveHangout(); },
         toggleService() { this.category.hasService = !this.category.hasService; this.updateSubtotal(); this.saveHangout(); },
         toggleDelivery() { this.category.hasDelivery = !this.category.hasDelivery; this.updateSubtotal(); this.saveHangout(); },
@@ -215,7 +236,12 @@ export default {
 .tax-details-section { margin-bottom: 8px; }
 .tax-details > div, .actual-tax-input { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .actual-tax-input input { max-width: 150px; text-align: right; }
-.list-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; background-color: var(--base); border-radius: 8px; margin-bottom: 8px; }
+.list-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background-color: var(--base); border-radius: 8px; margin-bottom: 8px; }
+.item-info { display: flex; flex-direction: column; }
+.item-amount { font-weight: 600; }
+.item-actions { display: flex; align-items: center; gap: 8px; }
+.btn-edit { background: none; border: none; cursor: pointer; color: var(--tertiary); padding: 4px; }
+.btn-remove { background: none; border: none; color: var(--danger); font-size: 1.5rem; font-weight: 700; cursor: pointer; padding: 4px; line-height: 1; }
 .tax-toggle-wrapper { display: flex; justify-content: space-between; align-items: center; }
 .tax-toggle-label { font-weight: 600; }
 .toggle-switch { width: 50px; height: 28px; background-color: var(--base); border-radius: 14px; cursor: pointer; display: flex; align-items: center; padding: 2px; }
