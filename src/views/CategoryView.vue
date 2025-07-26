@@ -81,6 +81,8 @@
                 </div>
             </div>
             <button @click="showAddItemDialog = true" class="btn-secondary" style="width:100%; margin-top: 16px;">+ Add Item</button>
+        
+            <ReceiptScanner @scan-complete="handleScanComplete" />
         </div>
         
         <div v-if="splitSummary.length > 0" class="card">
@@ -123,15 +125,29 @@
         <button @click="updateItem" class="btn-primary" style="width: 100%; margin-top: 16px;">Save Changes</button>
       </div>
     </div>
+
+    <AssignItemsDialog 
+        v-if="showAssignDialog" 
+        :scannedItems="scannedItems"
+        :people="hangout.people"
+        @close="showAssignDialog = false"
+        @save-assignments="handleSaveAssignments"
+    />
   </div>
 </template>
 
 <script>
 import { v4 as uuidv4 } from 'uuid';
 import { formatCurrency, loadCurrency } from '../utils/currency.js';
+import ReceiptScanner from '../components/ReceiptScanner.vue';
+import AssignItemsDialog from '../components/AssignItemsDialog.vue';
 
 export default {
     name: 'CategoryView',
+    components: {
+      ReceiptScanner,
+      AssignItemsDialog,
+    },
     data() {
         return {
             hangout: null,
@@ -142,6 +158,8 @@ export default {
             newItemAmount: '',
             showEditItemDialog: false,
             editingItem: null,
+            showAssignDialog: false,
+            scannedItems: [],
         }
     },
     computed: {
@@ -226,7 +244,37 @@ export default {
             if (!this.category.hasTax && !this.category.hasService && !this.category.hasDelivery) {
                 this.category.subtotal = this.category.totalAmount;
             }
-        }
+        },
+
+        // OCR LOGIC
+        handleScanComplete(parsedData) {
+            if (!parsedData || parsedData.items.length === 0) {
+                alert('Could not find any items on the receipt. Please try again.');
+                return;
+            }
+            // Update category totals from the scan
+            this.category.totalAmount = parsedData.total;
+            this.category.subtotal = parsedData.total - parsedData.tax;
+            if (parsedData.tax > 0) {
+                this.category.hasTax = true;
+                this.category.actualTax = parsedData.tax;
+            }
+            this.scannedItems = parsedData.items;
+            this.showAssignDialog = true;
+        },
+        handleSaveAssignments(assignedItems) {
+            assignedItems.forEach(assignedItem => {
+                this.category.items.push({
+                    id: uuidv4(),
+                    personId: assignedItem.personId,
+                    amount: assignedItem.total,
+                    // Note: 'description' from scan is not saved, but could be added
+                });
+            });
+            this.saveHangout();
+            this.showAssignDialog = false;
+            this.scannedItems = [];
+        },
     }
 }
 </script>
